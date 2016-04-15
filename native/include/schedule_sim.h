@@ -14,8 +14,8 @@ class Job {
     const Task  &task;
     simtime_t release;
     simtime_t cost;
-    simtime_t allocation;
-    simtime_t seqno;
+    simtime_t allocation;//已分配的执行时间
+    simtime_t seqno;//工作序列
 
   public:
     Job(const Task &tsk,
@@ -55,13 +55,13 @@ class Job {
         return cost - allocation;
     }
 
-    void init_next(simtime_t cost = 0, simtime_t inter_arrival_time = 0);
+    void init_next(simtime_t cost = 0, simtime_t inter_arrival_time = 0);//初始化下一个任务实例
 
-    // callbacks
+    // callbacks 回收
     virtual void completed(simtime_t when, int proc) {};
 };
 
-template <typename Job, typename SimJob>
+template <typename Job, typename SimJob>//模板类
 class ScheduleSimulationTemplate
 {
   public:
@@ -93,7 +93,7 @@ class SimJob : public Job, public Event<simtime_t>
 };
 
 template <typename SimJob, typename Task>
-class PeriodicJobSequenceTemplate : public SimJob
+class PeriodicJobSequenceTemplate : public SimJob//周期性工作序列
 {
   public:
     PeriodicJobSequenceTemplate(Task& tsk) : SimJob(tsk) {};
@@ -105,9 +105,9 @@ class PeriodicJobSequenceTemplate : public SimJob
 
 typedef PeriodicJobSequenceTemplate<SimJob, Task> PeriodicJobSequence;
 
-class EarliestDeadlineFirst {
+class EarliestDeadlineFirst {//EDF
   public:
-    bool operator()(const Job* a, const Job* b)
+    bool operator()(const Job* a, const Job* b)//判断job b是否需要执行操作
     {
         if (a && b)
             return a->get_deadline() > b->get_deadline();
@@ -152,7 +152,7 @@ template <typename JobPriority, typename Processor>
 class PreemptionOrderTemplate
 {
   public:
-    bool operator()(const Processor& a, const Processor& b)
+    bool operator()(const Processor& a, const Processor& b)//返回更高的优先级工作
     {
         JobPriority higher_prio;
         return higher_prio(a.get_scheduled(), b.get_scheduled());
@@ -162,22 +162,22 @@ class PreemptionOrderTemplate
 typedef std::priority_queue<Timeout<simtime_t>,
                             std::vector<Timeout<simtime_t> >,
                             std::greater<Timeout<simtime_t> >
-                             > EventQueue;
+                             > EventQueue;//到达事件队列（优先级队列）
 
 template <typename JobPriority>
-class GlobalScheduler : public ScheduleSimulation
+class GlobalScheduler : public ScheduleSimulation//全局调度
 {
     typedef std::priority_queue<Job*,
                                 std::vector<Job*>,
-                                JobPriority > ReadyQueue;
+                                JobPriority > ReadyQueue;//就绪队列
 
   private:
-    EventQueue events;
-    ReadyQueue pending;
+    EventQueue events;//事件队列
+    ReadyQueue pending;//就绪队列
     simtime_t  current_time;
 
-    Processor* processors;
-    int num_procs;
+    Processor* processors;//处理器
+    int num_procs;//处理器数量
 
     JobPriority                   lower_prio;
     PreemptionOrderTemplate<JobPriority, Processor>  first_to_preempt;
@@ -196,7 +196,7 @@ class GlobalScheduler : public ScheduleSimulation
 
         // 1) advance time until next event (job completion or event)
         for (int i = 0; i < num_procs; i++)
-            if (processors[i].advance_time(current_time - last))
+            if (processors[i].advance_time(current_time - last))//看各处理器中的job是否完成
             {
                 // process job completion
                 Job* sched = processors[i].get_scheduled();
@@ -234,7 +234,7 @@ class GlobalScheduler : public ScheduleSimulation
                                                 first_to_preempt);
             Job* scheduled = lowest_prio_proc->get_scheduled();
 
-            if (lower_prio(scheduled, highest_prio))
+            if (lower_prio(scheduled, highest_prio))//若正在执行的最低优先级工作比就绪队列中最高级的低，则发生抢占
             {
                 // do a preemption
                 pending.pop();
@@ -282,7 +282,7 @@ class GlobalScheduler : public ScheduleSimulation
 
     void simulate_until(simtime_t end_of_simulation)
     {
-        while (current_time <= end_of_simulation &&
+        while (current_time <= end_of_simulation &&//进行到最近一个事件发生的时刻
                !aborted &&
                !events.empty()) {
             simtime_t next = events.top().time();
